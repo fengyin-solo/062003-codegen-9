@@ -200,4 +200,96 @@ export const GAME_CONFIG = {
     themeKey: 'idol-agency-theme',
     maxSlots: 5,
   },
+
+  // ── 世界观时间线 ──
+  timeline: {
+    // 时间线节点类型
+    nodeTypes: {
+      debut: {
+        label: '组合出道',
+        icon: '🎉',
+        importance: 'high',
+        achievementPoints: 100,
+      },
+      single_release: {
+        label: '发行单曲',
+        icon: '💿',
+        importance: 'medium',
+        achievementPoints: 30,
+      },
+      fan_milestone: {
+        label: '粉丝里程碑',
+        icon: '👥',
+        importance: 'medium',
+        achievementPoints: 20,
+      },
+      money_milestone: {
+        label: '资金里程碑',
+        icon: '💰',
+        importance: 'medium',
+        achievementPoints: 25,
+      },
+      year_review: {
+        label: '年度回顾',
+        icon: '📅',
+        importance: 'high',
+        achievementPoints: 50,
+      },
+      major_event_positive: {
+        label: '重大正面事件',
+        icon: '⭐',
+        importance: 'high',
+        achievementPoints: 40,
+      },
+      major_event_negative: {
+        label: '重大负面事件',
+        icon: '⚠️',
+        importance: 'high',
+        achievementPoints: -20,
+      },
+      trainee_join: {
+        label: '练习生加入',
+        icon: '✨',
+        importance: 'low',
+        achievementPoints: 10,
+      },
+      trainee_leave: {
+        label: '练习生离社',
+        icon: '👋',
+        importance: 'low',
+        achievementPoints: -10,
+      },
+    },
+
+    // 粉丝里程碑
+    fanMilestones: [
+      { fans: 500, label: '初露锋芒' },
+      { fans: 2000, label: '小有名气' },
+      { fans: 5000, label: '人气上升' },
+      { fans: 10000, label: '万人瞩目' },
+      { fans: 30000, label: '人气组合' },
+      { fans: 50000, label: '国民度初现' },
+      { fans: 100000, label: '顶级流量' },
+    ],
+
+    // 资金里程碑
+    moneyMilestones: [
+      { money: 100000, label: '十万资金' },
+      { money: 300000, label: '三十万资金' },
+      { money: 500000, label: '五十万资金' },
+      { money: 1000000, label: '百万资金' },
+    ],
+
+    // 年度回顾阈值（天）
+    yearInterval: 365,
+
+    // 商业机会质量加成（基于成就点数）
+    opportunityBonus: {
+      salesMultiplierPerPoint: 0.0008,   // 每点成就增加 0.08% 销量
+      fansMultiplierPerPoint: 0.0006,    // 每点成就增加 0.06% 粉丝增长
+      maxMultiplier: 2.0,                 // 最大加成 200%
+      positiveEventBoostPerPoint: 0.0002, // 每点成就增加 0.02% 正面事件概率
+      maxPositiveEventBoost: 0.15,        // 最多增加 15% 正面事件概率
+    },
+  },
 }

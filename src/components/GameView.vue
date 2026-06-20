@@ -40,6 +40,7 @@
           :money="state.money"
           @release="(id) => $emit('release-single', id)"
         />
+        <TimelinePanel :timeline="timeline" />
         <RelationshipPanel
           :trainees="state.trainees"
           :relationships="state.relationships"
@@ -75,6 +76,12 @@
       @back="$emit('back')"
     />
 
+    <YearReviewModal
+      v-if="pendingYearReview"
+      :review="pendingYearReview"
+      @confirm="$emit('confirm-year-review')"
+    />
+
     <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
@@ -86,11 +93,13 @@ import TraineeCard from './TraineeCard.vue'
 import SchedulePanel from './SchedulePanel.vue'
 import DayLog from './DayLog.vue'
 import GroupsPanel from './GroupsPanel.vue'
+import TimelinePanel from './TimelinePanel.vue'
 import RelationshipPanel from './RelationshipPanel.vue'
 import RatingModal from './RatingModal.vue'
 import DebutModal from './DebutModal.vue'
 import EventModal from './EventModal.vue'
 import GameOverModal from './GameOverModal.vue'
+import YearReviewModal from './YearReviewModal.vue'
 
 const props = defineProps({
   state: Object,
@@ -101,6 +110,9 @@ const props = defineProps({
   canEndDay: Boolean,
   ratingResults: Array,
   calcScore: Function,
+  timeline: Object,
+  opportunityBonus: Object,
+  pendingYearReview: Object,
 })
 
 const emit = defineEmits([
@@ -113,6 +125,7 @@ const emit = defineEmits([
   'debut',
   'resolve-poaching',
   'release-single',
+  'confirm-year-review',
 ])
 
 const showDebut = ref(false)

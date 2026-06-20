@@ -18,6 +18,9 @@
     :can-end-day="canEndDay()"
     :rating-results="getRatingResults()"
     :calc-score="calcTraineeScore"
+    :timeline="state.timeline"
+    :opportunity-bonus="opportunityBonus"
+    :pending-year-review="state.pendingYearReview"
     @back="backToMenu"
     @toggle-theme="toggleTheme"
     @set-schedule="setSchedule"
@@ -27,6 +30,7 @@
     @debut="onDebut"
     @resolve-poaching="handlePoaching"
     @release-single="onReleaseSingle"
+    @confirm-year-review="handleYearReviewConfirm"
   />
 </template>
 
@@ -47,6 +51,7 @@ const {
   profit,
   daysLeft,
   activeTrainees,
+  opportunityBonus,
   startNewGame,
   loadGame,
   setSchedule,
@@ -57,6 +62,7 @@ const {
   handleDebut,
   handleReleaseSingle,
   dismissRating,
+  handleYearReviewConfirm,
   backToMenu,
   getRatingResults,
   calcTraineeScore,

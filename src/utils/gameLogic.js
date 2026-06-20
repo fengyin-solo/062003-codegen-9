@@ -1,5 +1,14 @@
 import { GAME_CONFIG } from '../config/gameConfig'
 import { randInt, randFloat, pickRandom, weightedPick, clamp, pairKey } from './random'
+import {
+  createInitialTimeline,
+  addTimelineNode,
+  checkFanMilestones,
+  checkMoneyMilestones,
+  checkYearlyReview,
+  applyYearlyReview,
+  getOpportunityBonus,
+} from './timeline'
 
 const CFG = GAME_CONFIG
 
@@ -24,6 +33,8 @@ export function createInitialGameState() {
     pendingRating: false,
     gameStatus: 'playing',
     lastSingleDay: {},
+    timeline: createInitialTimeline(),
+    pendingYearReview: null,
   }
 }
 
@@ -144,6 +155,8 @@ export function processDay(state) {
   const relationships = { ...state.relationships }
   const trainees = state.trainees.map((t) => ({ ...t, stats: { ...t.stats } }))
   const schedule = state.schedule
+  let timeline = state.timeline
+  const opportunityBonus = getOpportunityBonus(timeline.achievementPoints)
 
   const activityGroups = {}
   for (const [traineeId, activity] of Object.entries(schedule)) {
@@ -206,7 +219,8 @@ export function processDay(state) {
     trainee.stress = clamp(applyRange(trainee.stress, activity.stress), 0, 100)
 
     if (activity.fansGain) {
-      const gained = randInt(activity.fansGain[0], activity.fansGain[1])
+      const baseGained = randInt(activity.fansGain[0], activity.fansGain[1])
+      const gained = Math.round(baseGained * opportunityBonus.fansMultiplier)
       fans += gained
       trainee.fans += Math.round(gained * 0.3)
       logs.push({ day: state.day, text: `${trainee.name} 参与公关，粉丝 +${gained}。` })
@@ -269,11 +283,21 @@ export function processDay(state) {
   const pendingRating = state.day % CFG.rating.interval === 0
 
   let pendingEvent = null
-  if (Math.random() < CFG.events.dailyChance) {
-    pendingEvent = generateRandomEvent(trainees, state.day)
+  const adjustedEventChance = CFG.events.dailyChance + opportunityBonus.positiveEventBoost
+  if (Math.random() < adjustedEventChance) {
+    pendingEvent = generateRandomEvent(trainees, state.day, opportunityBonus)
     if (pendingEvent.type === 'fan_surge') {
-      fans += pendingEvent.fansGain
-      logs.push({ day: state.day, text: `【${pendingEvent.label}】粉丝 +${pendingEvent.fansGain}！` })
+      const boostedFans = Math.round(pendingEvent.fansGain * opportunityBonus.fansMultiplier)
+      fans += boostedFans
+      logs.push({ day: state.day, text: `【${pendingEvent.label}】粉丝 +${boostedFans}！` })
+      timeline = addTimelineNode(
+        timeline,
+        'major_event_positive',
+        state.day,
+        `${pendingEvent.label}：粉丝暴涨`,
+        `粉丝数增加 ${boostedFans.toLocaleString()} 人，事务所人气上升！`,
+        { fansGain: boostedFans }
+      )
       pendingEvent = null
     } else if (pendingEvent.type === 'inspiration') {
       const target = pendingEvent.target
@@ -295,6 +319,14 @@ export function processDay(state) {
         day: state.day,
         text: `【${pendingEvent.label}】粉丝 -${pendingEvent.fansLoss}，全员压力上升。`,
       })
+      timeline = addTimelineNode(
+        timeline,
+        'major_event_negative',
+        state.day,
+        `${pendingEvent.label}：舆论危机`,
+        `粉丝减少 ${pendingEvent.fansLoss.toLocaleString()} 人，事务所形象受损。`,
+        { fansLoss: pendingEvent.fansLoss }
+      )
       pendingEvent = null
     } else if (pendingEvent.type === 'illness') {
       pendingEvent.target.illnessDays = pendingEvent.duration
@@ -311,6 +343,18 @@ export function processDay(state) {
     }
   }
 
+  const fanResult = checkFanMilestones(timeline, fans, state.day)
+  timeline = fanResult.timeline
+  if (fanResult.hitMilestone) {
+    logs.push({ day: state.day, text: '🎊 粉丝里程碑达成！' })
+  }
+
+  const moneyResult = checkMoneyMilestones(timeline, money, state.day)
+  timeline = moneyResult.timeline
+  if (moneyResult.hitMilestone) {
+    logs.push({ day: state.day, text: '💰 资金里程碑达成！' })
+  }
+
   const nextState = {
     ...state,
     day: newDay,
@@ -323,22 +367,41 @@ export function processDay(state) {
     logs: [...state.logs, ...logs],
     pendingEvent,
     pendingRating,
+    timeline,
   }
 
   const result = checkVictory(nextState)
   if (result) nextState.gameStatus = result
 
+  const yearCheck = checkYearlyReview(nextState)
+  if (yearCheck.needsReview) {
+    nextState.pendingYearReview = yearCheck.review
+  }
+
   return nextState
 }
 
-function generateRandomEvent(trainees, day) {
+function generateRandomEvent(trainees, day, opportunityBonus = null) {
   const active = trainees.filter((t) => t.status !== 'left' && t.illnessDays === 0)
   if (active.length === 0) return null
 
-  const types = Object.entries(CFG.events.types).map(([key, val]) => ({
+  let types = Object.entries(CFG.events.types).map(([key, val]) => ({
     key,
     ...val,
   }))
+
+  if (opportunityBonus && opportunityBonus.positiveEventBoost > 0) {
+    types = types.map((t) => {
+      if (t.key === 'fan_surge' || t.key === 'inspiration') {
+        return { ...t, weight: t.weight * (1 + opportunityBonus.positiveEventBoost * 2) }
+      }
+      if (t.key === 'negative_news' || t.key === 'illness' || t.key === 'poaching') {
+        return { ...t, weight: t.weight * (1 - opportunityBonus.positiveEventBoost * 0.5) }
+      }
+      return t
+    })
+  }
+
   const picked = weightedPick(types)
   const target = pickRandom(active)
 
@@ -408,13 +471,38 @@ export function resolvePoachingEvent(state, keepTrainee) {
 
   target.status = 'left'
   logs.push({ day: state.day, text: `【挖角危机】${target.name} 被竞争对手挖走，离开了事务所！` })
-  const result = checkVictory({ ...state, trainees })
+
+  let timeline = state.timeline
+  timeline = addTimelineNode(
+    timeline,
+    'trainee_leave',
+    state.day,
+    `${target.name} 离社`,
+    `${target.name} 被竞争对手挖走，离开了事务所。`,
+    { traineeName: target.name, reason: 'poaching' }
+  )
+
+  const result = checkVictory({ ...state, trainees, timeline })
   return {
     ...state,
     trainees,
     logs,
+    timeline,
     pendingEvent: null,
     gameStatus: result || state.gameStatus,
+  }
+}
+
+export function confirmYearReview(state) {
+  if (!state.pendingYearReview) return state
+
+  const review = state.pendingYearReview
+  const timeline = applyYearlyReview(state.timeline, review, state.day)
+
+  return {
+    ...state,
+    timeline,
+    pendingYearReview: null,
   }
 }
 
@@ -465,9 +553,23 @@ export function debutGroup(state, memberIds, groupName) {
     },
   ]
 
+  let timeline = state.timeline
+  timeline = addTimelineNode(
+    timeline,
+    'debut',
+    state.day,
+    `组合「${groupName || groups[groups.length - 1].name}」出道`,
+    `成员：${members.map((m) => m.name).join('、')}。平均综合评分 ${Math.round(members.reduce((s, m) => s + calcTraineeScore(m), 0) / members.length)} 分。`,
+    {
+      groupName: groupName || groups[groups.length - 1].name,
+      members: members.map((m) => m.name),
+      avgScore: Math.round(members.reduce((s, m) => s + calcTraineeScore(m), 0) / members.length),
+    }
+  )
+
   return {
     success: true,
-    state: { ...state, trainees, groups, logs, pendingRating: false },
+    state: { ...state, trainees, groups, logs, pendingRating: false, timeline },
   }
 }
 
@@ -487,19 +589,22 @@ export function releaseSingle(state, groupId) {
     return { success: false, message: '资金不足' }
   }
 
+  const opportunityBonus = getOpportunityBonus(state.timeline.achievementPoints)
+
   const members = state.trainees.filter((t) => group.memberIds.includes(t.id))
   const statAvg =
     CFG.stats.reduce((s, k) => s + group.avgStats[k], 0) / CFG.stats.length
   const charmAvg = group.avgStats.charm
   const popularity = state.fans + members.reduce((s, m) => s + m.fans, 0)
 
-  const sales = Math.round(
+  const baseSales = Math.round(
     CFG.single.baseSales +
       statAvg * CFG.single.statWeight * 50 +
       popularity * CFG.single.fansWeight * 0.08 +
       charmAvg * CFG.single.charmWeight * 30 +
       randInt(-200, 400)
   )
+  const sales = Math.round(baseSales * opportunityBonus.salesMultiplier)
 
   const revenue = sales * CFG.single.revenuePerSale
   const groups = state.groups.map((g) => {
@@ -514,9 +619,10 @@ export function releaseSingle(state, groupId) {
     }
   })
 
+  const fansGain = Math.round(sales * 0.02 * opportunityBonus.fansMultiplier)
   const trainees = state.trainees.map((t) => {
     if (!group.memberIds.includes(t.id)) return t
-    return { ...t, singlesReleased: t.singlesReleased + 1, fans: t.fans + Math.round(sales * 0.05) }
+    return { ...t, singlesReleased: t.singlesReleased + 1, fans: t.fans + Math.round(sales * 0.05 * opportunityBonus.fansMultiplier) }
   })
 
   const logs = [
@@ -527,6 +633,27 @@ export function releaseSingle(state, groupId) {
     },
   ]
 
+  let timeline = state.timeline
+  timeline = addTimelineNode(
+    timeline,
+    'single_release',
+    state.day,
+    `${group.name} 发行新单曲`,
+    `销量 ${sales.toLocaleString()} 张，收入 ¥${revenue.toLocaleString()}。${opportunityBonus.salesMultiplier > 1.1 ? '（事务所口碑加成！）' : ''}`,
+    {
+      groupName: group.name,
+      sales,
+      revenue,
+      bonus: Math.round((opportunityBonus.salesMultiplier - 1) * 100),
+    }
+  )
+
+  const fanResult = checkFanMilestones(timeline, state.fans + fansGain, state.day)
+  timeline = fanResult.timeline
+
+  const moneyResult = checkMoneyMilestones(timeline, state.money - CFG.single.creationCost + revenue, state.day)
+  timeline = moneyResult.timeline
+
   return {
     success: true,
     state: {
@@ -534,10 +661,11 @@ export function releaseSingle(state, groupId) {
       money: state.money - CFG.single.creationCost + revenue,
       totalRevenue: state.totalRevenue + revenue,
       totalExpenses: state.totalExpenses + CFG.single.creationCost,
-      fans: state.fans + Math.round(sales * 0.02),
+      fans: state.fans + fansGain,
       groups,
       trainees,
       logs,
+      timeline,
       lastSingleDay: { ...state.lastSingleDay, [groupId]: state.day },
     },
     sales,

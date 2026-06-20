@@ -10,7 +10,9 @@ import {
   calcProfit,
   calcTraineeScore,
   getRelationship,
+  confirmYearReview,
 } from '../utils/gameLogic'
+import { getOpportunityBonus } from '../utils/timeline'
 import { saveToSlot } from '../utils/storage'
 
 export function useGame() {
@@ -102,6 +104,17 @@ export function useGame() {
     autoSave()
   }
 
+  function handleYearReviewConfirm() {
+    if (!state.value) return
+    state.value = confirmYearReview(state.value)
+    autoSave()
+  }
+
+  const opportunityBonus = computed(() => {
+    if (!state.value || !state.value.timeline) return null
+    return getOpportunityBonus(state.value.timeline.achievementPoints)
+  })
+
   function backToMenu() {
     autoSave()
     screen.value = 'menu'
@@ -119,6 +132,7 @@ export function useGame() {
     profit,
     daysLeft,
     activeTrainees,
+    opportunityBonus,
     startNewGame,
     loadGame,
     setSchedule,
@@ -129,6 +143,7 @@ export function useGame() {
     handleDebut,
     handleReleaseSingle,
     dismissRating,
+    handleYearReviewConfirm,
     backToMenu,
     getRel,
     getRatingResults: () => (state.value ? getRatingResults(state.value) : []),
