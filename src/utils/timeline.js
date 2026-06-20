@@ -2,26 +2,6 @@ import { GAME_CONFIG } from '../config/gameConfig'
 
 const TL_CFG = GAME_CONFIG.timeline
 
-export function createInitialTimeline() {
-  return {
-    nodes: [
-      {
-        id: 'start',
-        day: 1,
-        type: 'major_event_positive',
-        title: '事务所成立',
-        description: '五位练习生已就位，三年征途正式开始。',
-        data: {},
-      },
-    ],
-    achievementPoints: 0,
-    lastMilestoneFans: 0,
-    lastMilestoneMoney: 0,
-    lastYearReviewed: 0,
-    yearlyStats: {},
-  }
-}
-
 function createNode(type, day, title, description, data = {}) {
   const nodeType = TL_CFG.nodeTypes[type]
   return {
@@ -34,6 +14,24 @@ function createNode(type, day, title, description, data = {}) {
     importance: nodeType?.importance || 'medium',
     icon: nodeType?.icon || '📌',
     points: nodeType?.achievementPoints || 0,
+  }
+}
+
+export function createInitialTimeline() {
+  const startNode = createNode(
+    'major_event_positive',
+    1,
+    '事务所成立',
+    '五位练习生已就位，三年征途正式开始。',
+    {}
+  )
+  return {
+    nodes: [startNode],
+    achievementPoints: Math.max(0, startNode.points),
+    lastMilestoneFans: 0,
+    lastMilestoneMoney: 0,
+    lastYearReviewed: 0,
+    yearlyStats: {},
   }
 }
 

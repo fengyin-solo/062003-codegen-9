@@ -111,8 +111,8 @@ export function useGame() {
   }
 
   const opportunityBonus = computed(() => {
-    if (!state.value || !state.value.timeline) return null
-    return getOpportunityBonus(state.value.timeline.achievementPoints)
+    const points = state.value?.timeline?.achievementPoints || 0
+    return getOpportunityBonus(points)
   })
 
   function backToMenu() {
